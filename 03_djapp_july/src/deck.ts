@@ -36,6 +36,10 @@ export interface DeckState {
   eqMid: number; // dB, -12..12
   eqHigh: number; // dB, -12..12
   filterCutoff: number; // -1 (LPF down to 100Hz) .. 0 (bypass) .. 1 (HPF up to 10kHz)
+  cuePointNorm: number | null; // normalized cue point position 0..1, null if not set
+  loopEnabled: boolean; // whether looping is active
+  loopInNorm: number; // normalized loop in point 0..1
+  loopOutNorm: number; // normalized loop out point 0..1
 }
 
 export function initialDeckState(id: string): DeckState {
@@ -51,6 +55,10 @@ export function initialDeckState(id: string): DeckState {
     eqMid: 0,
     eqHigh: 0,
     filterCutoff: 0,
+    cuePointNorm: null,
+    loopEnabled: false,
+    loopInNorm: 0,
+    loopOutNorm: 1,
   };
 }
 
@@ -125,7 +133,26 @@ export function buildDeckSignal(s: DeckState): DeckSignal | null {
   const seekTrig = el.const({ key: `${s.id}_seek`, value: s.seekGen });
   const base = el.const({ key: `${s.id}_base`, value: s.baseNorm });
 
-  const position = el.add(base, el.accum(inc, seekTrig));
+  let position = el.add(base, el.accum(inc, seekTrig));
+
+  // Loop wrapping: when loop is enabled and valid, wrap position into [loopIn, loopOut)
+  if (s.loopEnabled && s.loopInNorm < s.loopOutNorm) {
+    const loopLen = s.loopOutNorm - s.loopInNorm;
+    const loopStart = el.const({ key: `${s.id}_loopStart`, value: s.loopInNorm });
+    const loopLength = el.const({ key: `${s.id}_loopLen`, value: loopLen });
+    
+    // Offset position to loop start
+    const offset = el.sub(position, loopStart);
+    
+    // Floored modulo: x - len·floor(x/len)
+    const wrapped = el.sub(
+      offset,
+      el.mul(loopLength, el.floor(el.div(offset, loopLength)))
+    );
+    
+    // Add back loop start
+    position = el.add(loopStart, wrapped);
+  }
 
   const leftRaw = el.table({ key: `${s.id}_tblL`, path: pathL }, position);
   const rightRaw = el.table({ key: `${s.id}_tblR`, path: pathR }, position);

@@ -17,12 +17,16 @@ interface Props {
   peaks: TrackPeaks | null;
   position: number; // normalized 0..1
   onSeek: (norm: number) => void;
+  cuePoint: number | null; // normalized cue point position 0..1, null if not set
+  loopIn: number | null; // normalized loop in point 0..1, null if not set
+  loopOut: number | null; // normalized loop out point 0..1, null if not set
+  loopEnabled: boolean; // whether looping is active
 }
 
 const CACHE_HEIGHT = 256; // offscreen bitmap height; scaled to the canvas at blit time
 const MIN_WINDOW = 0.02; // closest zoom: 2% of the track visible
 
-export default function Waveform({ peaks, position, onSeek }: Props) {
+export default function Waveform({ peaks, position, onSeek, cuePoint, loopIn, loopOut, loopEnabled }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cacheRef = useRef<HTMLCanvasElement | null>(null);
   const [windowFrac, setWindowFrac] = useState(1); // fraction of track visible (1 = all)
@@ -115,6 +119,79 @@ export default function Waveform({ peaks, position, onSeek }: Props) {
     // Blit just the visible slice, scaled to the canvas.
     ctx.drawImage(cache, start, 0, win, cache.height, 0, 0, cssW, cssH);
 
+    // Draw loop region overlay (only if enabled)
+    if (loopEnabled && loopIn !== null && loopOut !== null) {
+      const loopInX = ((loopIn * total - start) / win) * cssW;
+      const loopOutX = ((loopOut * total - start) / win) * cssW;
+      
+      // Semi-transparent overlay
+      ctx.fillStyle = 'rgba(76, 194, 255, 0.2)';
+      ctx.fillRect(loopInX, 0, loopOutX - loopInX, cssH);
+    }
+
+    // Draw loop in marker (always show if set)
+    if (loopIn !== null) {
+      const loopInX = ((loopIn * total - start) / win) * cssW;
+      
+      // Loop in marker (green)
+      ctx.strokeStyle = '#4ade80';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(loopInX, 0);
+      ctx.lineTo(loopInX, cssH);
+      ctx.stroke();
+      
+      // Add "IN" label
+      ctx.fillStyle = '#4ade80';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('IN', loopInX + 4, 16);
+    }
+    
+    // Draw loop out marker (always show if set)
+    if (loopOut !== null) {
+      const loopOutX = ((loopOut * total - start) / win) * cssW;
+      
+      // Loop out marker (red)
+      ctx.strokeStyle = '#f87171';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(loopOutX, 0);
+      ctx.lineTo(loopOutX, cssH);
+      ctx.stroke();
+      
+      // Add "OUT" label
+      ctx.fillStyle = '#f87171';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText('OUT', loopOutX - 4, 16);
+    }
+
+    // Draw cue point marker (yellow)
+    if (cuePoint !== null) {
+      const cueX = ((cuePoint * total - start) / win) * cssW;
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(cueX, 0);
+      ctx.lineTo(cueX, cssH);
+      ctx.stroke();
+      
+      // Add triangle marker at top
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath();
+      ctx.moveTo(cueX, 0);
+      ctx.lineTo(cueX - 5, 10);
+      ctx.lineTo(cueX + 5, 10);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Add "CUE" label
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('CUE', cueX, 26);
+    }
+
     // Playhead at its true position within the visible window.
     const playX = ((position * total - start) / win) * cssW;
     ctx.strokeStyle = '#ff6b6b';
@@ -123,7 +200,7 @@ export default function Waveform({ peaks, position, onSeek }: Props) {
     ctx.moveTo(playX, 0);
     ctx.lineTo(playX, cssH);
     ctx.stroke();
-  }, [position, windowFor]);
+  }, [position, windowFor, cuePoint, loopIn, loopOut, loopEnabled]);
 
   useEffect(() => {
     draw();
