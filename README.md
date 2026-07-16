@@ -57,12 +57,9 @@ npm run dev
 
 ## 👥 Team
 
-Built by the IBM July Challenge team, showcasing:
-- Advanced React patterns
-- Web Audio API expertise
-- DSP implementation
-- Performance optimization
-- Technical documentation
+- IBM July Challenge team
+- Ane Varela
+- IBM Bob
 
 ## 📄 Documentation Philosophy
 
